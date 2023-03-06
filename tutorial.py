@@ -7,7 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/1aK3u6gRONfENmbRf3Rzz-UAlmcTc8jR4
 
 # This shows how to build a tensorflow(2.x) model with various method. Guides on the internet are not explained well, especially the pros and cons between them.
-# 這示範各種不同建tf(2.x) model的方法，網路上介紹的都很破也沒介紹方法間的優劣，尤其是中文資源（OO邦倒忙）。
+# 這示範各種不同建tf(2.x) model的方法，網路上介紹的都很破也沒介紹方法間的優劣，尤其是中文資源（OO幫倒忙）。
 
 The methods are listed below:
 有以下幾種方法
@@ -31,15 +31,16 @@ model = keras.Sequential(
     ]
 )
 
-"""Next we move to Functional method. This is the most used method in my coding. It has the merit of elasticity build that you can build any types of network with this method, and you don't need to type much like class method. Example below shows the cross layer connection that fails in sequential method. The double defined x2 variable shows that the tensorflow will calculate the connection for re-defined x2, so you can be ease for it (it is counted in).
+"""Next we move to Functional method. This is the most used method in my coding. It has the merit of elasticity build that you can build any types of network with this method, and you don't need to type much like class method. Example below shows the cross layer connection that fails in sequential method. The re-defined x2 variable shows that the tensorflow will calculate the connection for re-defined x2, so you can be ease for it (it is counted in).
 
-Functional是最彈性的搭建方法，所有類型的網路都可以用它建而且不用像class打一堆字，下面的add layer就是sequential法無法做到的。連續兩次出現的x2表示tensorflow會計算被重新命名的x2變數，所以不用擔心這樣沒接到。
+Functional是最彈性的搭建方法，所有類型的網路都可以用它建而且不用像class打一堆字，下面的add layer就是sequential法無法做到的。重新定義的x2展示了tensorflow會計算被重新命名的x2變數，所以不用擔心這樣沒接到。
 """
 
 inputs = layers.Input((10, 20), batch_size=None)
 x1 = layers.Dense(64, activation="relu")(inputs)
 x2 = layers.Dense(64, activation="relu")(x1)
-x2 = layers.Add()([x1, x2])
+x2 = layers.Add()([x1, x2])    # cross layer connection
+x2 = layers.Dense(64)(x2)      # re-defined variable x2
 outputs = layers.Dense(10)(x2)
 model = keras.Model(inputs=inputs, outputs=outputs, name="mnist_model")
 
@@ -50,9 +51,9 @@ layers.Input的batch_size只是提早指定batch size，如果你現在用model.
 接下來我們講一些有用的trick，如果要取得中間層的輸出可以這樣寫，然後用model.outputs檢查輸出維度：
 """
 
-model2 = keras.Model(inputs=inputs, outputs=x1)
+model2 = keras.Model(inputs=inputs, outputs=x1)    # get intermediate output
 model2(YOUR_INPUT_DATA)
-print(model2.inputs)
+print(model2.inputs)    # check the model inputs and outputs dimension
 print(model2.outputs)
 
 """If your network is build by many same block, you can do this (you can also do this with sequential method):
@@ -60,62 +61,75 @@ print(model2.outputs)
 如果你的網路是好幾個同樣的小網路構成可以這樣寫(sequential也可以這樣)：
 """
 
+# common mistake, you re-connect x1 to inputs so x1 is only defined once
 def small_model(depth):
   inputs = layers.Input((10, 20), batch_size=None)
   for i in range(depth):
-    x1 = layers.Dense(64, activation="relu")(inputs)
-    x2 = layers.Dense(64, activation="relu")(x1)
-  outputs = layers.Dense(10)(x2)
-  # return layers.Dense(10)(x2)
+    x1 = layers.Dense(64, activation="relu")(inputs) # wrong, only connect once
+    x1 = layers.Dense(32, activation="relu")(x1)
+  outputs = layers.Dense(10)(x1)
   return keras.Model(inputs=inputs, outputs=outputs)
+
+# correct version, check these two version by small_model(3).summary()
+def small_model(depth):
+  inputs = layers.Input((10, 20), batch_size=None)
+  x1 = layers.Dense(64, activation="relu")(inputs) 
+  for i in range(depth):    # build multiple layer with for loop
+    x1 = layers.Dense(64, activation="relu")(x1)     
+    x1 = layers.Dense(32, activation="relu")(x1)
+  outputs = layers.Dense(10)(x1)
+  return keras.Model(inputs=inputs, outputs=outputs)    # return a "model"
 
 x = layers.Input((10, 20), batch_size=None)
 x1 = small_model(depth)(x)
 x2 = small_model(depth)(x)
 outputs = layers.Add()([x1, x2])
 model3 = keras.Model(inputs=inputs, outputs=outputs, name="mnist_model")
+model3.summary()
 
 """This shows the network you can define the depth in one shot. It also shows how to outputs multiple layer within single inputs.
-Here comes the new problem. What if the def not return model but a layer? The answer is you can more easily view all the layer in your network, on the contrary, return model would directly outputs small_block with property model. You can check this by model3.summary() or tf.keras.utils.plot_model(model3). Below is the example by return layer.
+Here comes the new problem. What if the def not return model but a tensor (layer)? The answer is you can more easily view all the layers in your network, on the contrary, return model would directly outputs small_block with property model. You can check this by model3.summary() or tf.keras.utils.plot_model(model3). Below is the example by return layer.
 
 
 
 這樣就是一個你可以決定每個block要幾層的network，有種樂高的感覺，然後這個範例也解釋了一個輸入(x1)拆到多個輸出(x1, x2)要怎麼打。
-這時候有個新問題，如果def不return model而是return layer會發生什麼事？答案是你可以更方便的檢視你所有層的連接，相反地model會直接輸出一個block，你可以用model3.summary() or tf.keras.utils.plot_model(model3)確認他的長相，下面是return layer的範例。
+這時候有個新問題，如果def不return model而是return tensor (layer)會發生什麼事？答案是你可以更方便的檢視你所有層的連接，相反地model會直接輸出一個block，你可以用model3.summary() or tf.keras.utils.plot_model(model3)確認他的長相，下面是return layer的範例。
 """
 
-def multiple_tensor(input_tensor, depth):
+def multiple_tensor_graph(input_tensor, depth):
+  x1 = layers.Dense(64, activation="relu")(input_tensor)
   for i in range(depth):
-    x1 = layers.Dense(64, activation="relu")(inputs)
-    x2 = layers.Dense(64, activation="relu")(x1)
-  outputs = layers.Dense(10)(x2)
-  return layers.Dense(10)(x2)    # return is a tensor
+    x1 = layers.Dense(64, activation="relu")(x1)
+    x1 = layers.Dense(32, activation="relu")(x1)
+  outputs = layers.Dense(10)(x1)
+  return layers.Dense(10)(x1)    # return a "tensor"
 
 x = layers.Input((10, 20), batch_size=None)
 x1 = multiple_tensor(x, depth)    # note that since it return a tensor, it need 
 x2 = multiple_tensor(x, depth)    # a tensor input instead of layers.Input
 outputs = layers.Add()([x1, x2])
-model3 = keras.Model(inputs=inputs, outputs=outputs, name="mnist_model")
+model4 = keras.Model(inputs=inputs, outputs=outputs, name="mnist_model")
+model4.summary()
 
 """The last is class method. The only merit I can found is variable safe.
 
 最後是class法，除了變數安全我真的不知道他好在哪
 """
 
-class finals(tf.keras.Model):
+class myModel(tf.keras.Model):                # class method means inherit from keras.Model
     def __init__(self, variable_you_need):    # functional method don't need this line!
-        super(finals, self).__init__()    # functional method don't need this line!
+        super(myModel, self).__init__()       # functional method don't need this line!
         self.brabrabra = variable_you_need
-        self.Avg = layers.AveragePooling1D(www)    # you need to type twice when making single layer!
-        self.yBN = layers.BatchNormalization()
+        self.Avg = layers.AveragePooling1D(1) # you need to type twice when making single layer!   
+        self.yBN = layers.BatchNormalization() 
         self.pBN = layers.BatchNormalization()
-        self.cat = layers.Concatenate()
-        self.FC = layers.Dense(ww)
+        self.cat = layers.Concatenate()        
+        self.FC = layers.Dense(1)
         self.AC = layers.Activation('sigmoid')
         self.FL = layers.Flatten(name='A')
     def call(self, inputs):
         y_final, p_final, sa_final = inputs   # when the layer has dimension error, it's hard to debug it!
-        y_final = self.Avg(y_final)       # functional method don't need to type self. !
+        y_final = self.Avg(y_final)           # functional method don't need to type self. !
         y_final = self.yBN(y_final)
         p_final = self.pBN(p_final)
         outputs = self.cat([y_final, p_final, sa_final])
@@ -141,18 +155,19 @@ eck the number of trainable parameter by model.summary() and keras_flops package
 最後我們討論用model和跟tensor建的不同，如果常檢查weight或需要中間層的輸出，那用tensor會很方便，不然用model建就足夠了，而且用model你可以檢查可train參數量還能用keras_flops package，tensor沒辦法用這些東西。最後的最後給一個training的範例。
 """
 
-# example with multi-IO multi-loss, now you are expert in keras
-model.compile(optimizer=adam,    
-             loss=['categorical_crossentropy', tf.losses.BinaryCrossentropy]
-             loss_weights=[.8, .2],    # define their weight
+model.compile(optimizer=adam,
+             loss=['categorical_crossentropy', tf.losses.BinaryCrossentropy],
+             loss_weights=[.8, .2],
              metrics='acc')
 
-model.fit([input1, input2],[output1, output2],
+model.fit(inputs, label,
         epochs=60,
         batch_size=1024,
         validation_split=0.1,
-        callbacks=[reduce_lr, early_stop, your_callbacks()],
-        verbose=1)
+        callbacks=[tf.keras.callbacks.EarlyStopping(monitor='loss', patience=3),
+                   tf.keras.callbacks.ReduceLROnPlateau(
+                       monitor='val_loss', factor=0.2, patience=5, min_lr=0.001)])
+# early stop when converge and reduce learning rate for loss floor
 
 """# Now you have finished the course. Below is not often used trick you can search it long after.
 
@@ -164,7 +179,7 @@ Custom loss:
 class bce(tf.keras.losses.Loss):
     def __init__(self, tau=0.5, name='myloss', **kwargs):
       super(custom_metric, self).__init__(name=name, **kwargs)
-      self.L1 = tf.losses.BinaryCrossentropy()
+      self.L1 = tf.losses.BinaryCrossentropy()    # loss 1
 
     def call(self, y_true, y_pred, from_logits=False, label_smoothing=0.0, axis=-1):
         # call defines what it computes
@@ -227,6 +242,20 @@ outputs1 = layers.Dense(10)(x2)
 outputs2 = layers.Dense(1)(x1)
 model = keras.Model(inputs=[inputs1, inputs2], outputs=[outputs1, outputs2])
 
+# compile with multi loss
+model.compile(optimizer=adam,    
+             loss=['categorical_crossentropy', tf.losses.BinaryCrossentropy],
+             loss_weights=[.8, .2],    # define their weight
+             metrics='acc')
+
+# train with multi input output
+model.fit([input1, input2],[output1, output2],
+        epochs=60,
+        batch_size=1024,
+        validation_split=0.1,
+        callbacks=[reduce_lr, early_stop, your_callbacks()],
+        verbose=1)
+
 """transfer learning:
 
 *https://keras.io/guides/transfer_learning/#freezing-layers-understanding-the-trainable-attribute*
@@ -269,8 +298,8 @@ inputs = layers.Input((1,10))(x)
 a = poor_guy(x)
 a = poor_guy(a)
 outputs = poor_guy(a)
-model() = keras.Model(inputs=inputs, outputs=outputs)
-model4.summary()
+model5() = keras.Model(inputs=inputs, outputs=outputs)
+tf.keras.utils.plot_model(model5)
 
 """Generator: when the training data is too big GPU can't accomadate."""
 
@@ -289,10 +318,10 @@ model.fit(your_generator(),
         batch_size=2048,
         validation_data=VAL_DATA,
         validation_steps=1,
-        steps_per_epoch=5000,    # how many steps in single epoch since it don't
-        callbacks=[reduce_lr])   # know the total data size
+        steps_per_epoch=5000,    # this defines how many steps in single epoch 
+        callbacks=[reduce_lr])   # since it doesn't know the total data size
 
-"""Faster training: jit compile (XLA)"""
+"""Faster training: jit compile (XLA). *See https://www.tensorflow.org/xla/tutorials/autoclustering_xla*"""
 
 # add it before model.fit. You can set false before build model
 # example:
@@ -303,7 +332,7 @@ tf.keras.backend.clear_session()
 tf.config.optimizer.set_jit(True)
 # ...model.fit
 
-"""Faster training: mixed precision (might cause zero gradient)"""
+"""Faster training: mixed precision (might cause zero gradient). *See https://www.tensorflow.org/guide/mixed_precision*"""
 
 # you need to put this before construct any tensor, better first line
 from tensorflow.keras import mixed_precision
@@ -364,7 +393,7 @@ We discussed:
 2.   Difference of where to define batch size
 3.   What happens to rename a connected layer
 4.   Multi-same network construct
-5.   Model construct or layer construct
+5.   Model construct or tensor (layer) construct
 6.   Multi-input/output model/layer
 7.   Custom loss/layer/callback
 8.   How to pack multiple model
@@ -376,7 +405,7 @@ We discussed:
 2. 哪裡定義batch size的差別
 3. 重定義一個連接過的層會怎樣
 4. 多個相同network建構
-5. 要用model還是layer
+5. 要用model還是tensor (layer)建構
 6. 多輸入輸出的模型或層
 7. 自定義loss/layer/callback
 8. 如何打包多模型
