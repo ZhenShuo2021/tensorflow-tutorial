@@ -3,7 +3,7 @@ this is the **`FASTEST`** guide on model building
 
 ## Why this tutorial?
 * Common tutorial not explain the difference between seqential, functional, class method model. This tutorial explain the difference between them.
-* Some useful trick and misunderstanding are collected in this tutorial.
+* This tutorial gathers useful tricks and addresses common misunderstandings.
 
 # tensorflow 教學
 最快的tensorflow模型搭建教學
